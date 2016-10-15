@@ -52,59 +52,130 @@ function Get-NotesUser
 {
   [cmdletbinding()]
   param(
+    [parameter()]
     [string[]]$NotesDatabase
     ,
-    [string]$PrimarySMTPAddress
+    [parameter(ParameterSetName = 'ByIdentity',Mandatory)]
+    [string[]]$Identity
+    ,
+    [parameter(ParameterSetName = 'All')]
+    [switch]$All
+    ,
+    [parameter(ParameterSetName = 'All',Mandatory)]
+    [string[]]$Property
   )
+Begin
+{
+  #Create the Views Hashtable if needed
   if (-not (Test-Path -Path variable:Global:NotesViews))
   {
     New-Variable -Name NotesViews -Value @{} -Scope Global
   }
-  $userdocs = @()
-  foreach ($ND in $NotesDatabase)
+  #Create the View Object(s) if needed
+  switch ($PSCmdlet.ParameterSetName)
   {
-    $DatabaseView = "$($ND)Users"
-    if (-not ($NotesViews.ContainsKey($DatabaseView)))
+    'ByIdentity'
     {
-        $NotesViews.$DatabaseView = $NotesDatabaseConnections.$ND.GetView('($Users)')
-    }
-    $userdoc = @($NotesViews.$DatabaseView.GetDocumentByKey($PrimarySMTPAddress) | Where-Object -FilterScript {$_ -ne $null})
-    switch ($userdoc.Count)
+      #Setup the Users View if needed
+      foreach ($ND in $NotesDatabase)
+      {
+        $DatabaseView = "$($ND)Users"
+        if (-not ($NotesViews.ContainsKey($DatabaseView)))
+        {
+            $NotesViews.$DatabaseView = $NotesDatabaseConnections.$ND.GetView('($Users)')
+        }
+      }
+    }#ByName
+    'All'
     {
-        1
+      #Setup the People View if needed
+      foreach ($ND in $NotesDatabase)
+      {
+        $DatabaseView = "$($ND)People"
+        if (-not ($NotesViews.ContainsKey($DatabaseView)))
         {
-            $userdocs += $userdoc
+            $NotesViews.$DatabaseView = $NotesDatabaseConnections.$ND.GetView('People')
         }
-        0
-        {}
-        default
-        {
-            throw "$PrimarySMTPAddress is ambiguous in `$ND"
-        }
-    }
-  }
-  switch ($userdocs.Count)
+      }#foreach
+    }#All
+  }#switch
+}#Begin
+Process
+{
+  switch ($PSCmdlet.ParameterSetName)
   {
-    1
+    'ByIdentity'
     {
-        $rawNotesUserdoc = $userdocs[0]
-        $NotesUserObject = [pscustomobject]@{}
-        foreach ($item in $($rawNotesUserdoc.Items | Sort-Object -Property Name))
+      foreach ($ID in $Identity)
+      {
+        $userdocs = @()
+        foreach ($ND in $NotesDatabase)
         {
-            if ($NotesUserObject.psobject.members.GetEnumerator().Name -notcontains $item.name)
+          $userdoc = @($NotesViews.$DatabaseView.GetDocumentByKey($ID) | Where-Object -FilterScript {$_ -ne $null})
+          switch ($userdoc.Count)
+          {
+            1
             {
-              $NotesUserObject | Add-Member -Name $($item.name) -value $(if ($item.values.count -gt 1) {$item.text} else {$item.values}) -MemberType NoteProperty
+                $userdocs += $userdoc
             }
+            0
+            {}
+            default
+            {
+                throw "$ID is ambiguous in `$ND"
+            }
+          }
         }
-        Write-Output -InputObject $NotesUserObject
-    }
-    0
-    {Write-Warning -Message "No Notes User for $PrimarySMTPAddress was found"}
-    default
+        switch ($userdocs.Count)
+        {
+          0
+          {Write-Warning -Message "No Notes User for $ID was found"}
+          default
+          {
+              throw "$ID is ambiguous among Notes Databases: $($NotesDatabase -join ',')"
+          }
+          1
+          {
+              $rawNotesUserdoc = $userdocs[0]
+              $NotesUserObject = [pscustomobject]@{}
+              foreach ($item in $($rawNotesUserdoc.Items | Sort-Object -Property Name))
+              {
+                  if ($NotesUserObject.psobject.members.GetEnumerator().Name -notcontains $item.name)
+                  {
+                    $NotesUserObject | Add-Member -Name $($item.name) -value $(if ($item.values.count -gt 1) {$item.text} else {$item.values}) -MemberType NoteProperty
+                  }
+              }
+              Write-Output -InputObject $NotesUserObject
+          }
+        }
+      }#foreach ID in Identity
+    }#ByIdentity
+    'All'
     {
-        throw "$PrimarySMTPAddress is ambiguous among Notes Databases: $($NotesDatabase -join ',')"
-    }
+      $NotesUserObjects = @(
+        foreach ($ND in $NotesDatabase)
+        {
+          $RecordCount = $NotesViews.$DatabaseView.EntryCount
+          $userdoc = $NotesViews.$DatabaseView.GetFirstDocument()
+          $count = 0
+
+            While ($userdoc -ne $null)
+            {
+              $Count++
+              $nuh = @{}
+              foreach ($prop in $Property)
+              {
+                $nuh.$prop = $userdoc.GetItemValue($prop)
+              }
+              $nuo = New-Object -TypeName PSCustomObject -Property $nuh
+              Write-Output -InputObject $nuo
+              $userdoc = $NotesViews.$DatabaseView.GetNextDocument($userdoc)
+            }
+        }#foreach
+      )#NotesUserObjects
+    } #All
   }
+}#Process
 }
 function Convert-SecureStringToString
 {
