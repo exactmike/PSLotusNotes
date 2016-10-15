@@ -63,9 +63,6 @@ function Get-NotesUser
     ,
     [parameter(ParameterSetName = 'All',Mandatory)]
     [string[]]$Property
-    ,
-    [parameter(ParameterSetName = 'All')]
-    [string]$Delimiter
   )
 Begin
 {
