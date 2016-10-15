@@ -52,7 +52,7 @@ function Get-NotesUser
 {
   [cmdletbinding()]
   param(
-    [parameter()]
+    [parameter(Mandatory)]
     [string[]]$NotesDatabase
     ,
     [parameter(ParameterSetName = 'ByIdentity',Mandatory)]
@@ -63,6 +63,9 @@ function Get-NotesUser
     ,
     [parameter(ParameterSetName = 'All',Mandatory)]
     [string[]]$Property
+    ,
+    [parameter(ParameterSetName = 'All')]
+    [string]$Delimiter
   )
 Begin
 {
@@ -111,6 +114,7 @@ Process
         $userdocs = @()
         foreach ($ND in $NotesDatabase)
         {
+          $DatabaseView = "$($ND)Users"
           $userdoc = @($NotesViews.$DatabaseView.GetDocumentByKey($ID) | Where-Object -FilterScript {$_ -ne $null})
           switch ($userdoc.Count)
           {
@@ -155,24 +159,26 @@ Process
       $NotesUserObjects = @(
         foreach ($ND in $NotesDatabase)
         {
+          $DatabaseView = "$($ND)People"
           $RecordCount = $NotesViews.$DatabaseView.EntryCount
           $userdoc = $NotesViews.$DatabaseView.GetFirstDocument()
           $count = 0
-
-            While ($userdoc -ne $null)
+          While ($userdoc -ne $null)
+          {
+            $Count++
+            $nuh = @{}
+            foreach ($prop in $Property)
             {
-              $Count++
-              $nuh = @{}
-              foreach ($prop in $Property)
-              {
-                $nuh.$prop = $userdoc.GetItemValue($prop)
-              }
-              $nuo = New-Object -TypeName PSCustomObject -Property $nuh
-              Write-Output -InputObject $nuo
-              $userdoc = $NotesViews.$DatabaseView.GetNextDocument($userdoc)
+              $nuh.$prop = $userdoc.GetItemValue($prop)
+              if ($nuh.$prop.count -eq 1) {$nuh.$prop = $nuh.$prop[0].tostring()}
             }
+            $nuo = New-Object -TypeName PSCustomObject -Property $nuh
+            Write-Output -InputObject $nuo
+            $userdoc = $NotesViews.$DatabaseView.GetNextDocument($userdoc)
+          }
         }#foreach
       )#NotesUserObjects
+    Write-Output -InputObject $NotesUserObjects
     } #All
   }
 }#Process
