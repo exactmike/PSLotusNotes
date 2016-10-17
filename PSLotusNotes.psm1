@@ -175,7 +175,7 @@ Process
                     ID = 1
                     ParentID = -1
                     PercentComplete = $Count/$RecordCount*100
-                    Status = 'Starting'
+                    Status = 'Progressing'
                 }
                 if ($Count -gt 1)
                 {
@@ -188,7 +188,7 @@ Process
             foreach ($prop in $Property)
             {
               $nuh.$prop = $userdoc.GetItemValue($prop)
-              if ($nuh.$prop.count -eq 1) {$nuh.$prop = $nuh.$prop[0].tostring()}
+              if ($nuh.$prop.count -eq 1 -and -not [string]::IsNullOrEmpty($nuh.$prop[0])) {$nuh.$prop = $nuh.$prop[0].tostring()}
             }
             $nuo = New-Object -TypeName PSCustomObject -Property $nuh
             Write-Output -InputObject $nuo
@@ -197,6 +197,7 @@ Process
           if ($Interactive)
           {
             $WriteProgressParams.completed = $true
+            $WriteProgressParams.Status = 'Completed'
             Write-Progress @WriteProgressParams
           }
         }#foreach
