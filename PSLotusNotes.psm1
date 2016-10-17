@@ -63,6 +63,8 @@ function Get-NotesUser
     ,
     [parameter(ParameterSetName = 'All',Mandatory)]
     [string[]]$Property
+    ,
+    [switch]$Interactive
   )
 Begin
 {
@@ -153,16 +155,35 @@ Process
     }#ByIdentity
     'All'
     {
-      $NotesUserObjects = @(
+      #$NotesUserObjects = @(
         foreach ($ND in $NotesDatabase)
         {
           $DatabaseView = "$($ND)People"
           $RecordCount = $NotesViews.$DatabaseView.EntryCount
+          $stopwatch = [system.diagnostics.stopwatch]::startNew()
           $userdoc = $NotesViews.$DatabaseView.GetFirstDocument()
           $count = 0
           While ($userdoc -ne $null)
           {
             $Count++
+            if ($Interactive)
+            {
+                $WriteProgressParams = @{
+                    Activity = "Retrieving Notes Database People View Objects from Notes Database $ND, Record $Count of $RecordCount"
+                    Completed = $false
+                    CurrentOperation = $Count
+                    ID = 1
+                    ParentID = -1
+                    PercentComplete = $Count/$RecordCount*100
+                    Status = 'Starting'
+                }
+                if ($Count -gt 1)
+                {
+                    $EstimatedRemainingSeconds = ($($stopwatch.Elapsed.TotalSeconds.ToInt32($null))/($Count - 1)) * ($RecordCount - ($Count - 1))
+                    $WriteProgressParams.SecondsRemaining = $EstimatedRemainingSeconds
+                }
+                Write-Progress @WriteProgressParams
+            }
             $nuh = @{}
             foreach ($prop in $Property)
             {
@@ -173,9 +194,14 @@ Process
             Write-Output -InputObject $nuo
             $userdoc = $NotesViews.$DatabaseView.GetNextDocument($userdoc)
           }
+          if ($Interactive)
+          {
+            $WriteProgressParams.completed = $true
+            Write-Progress @WriteProgressParams
+          }
         }#foreach
-      )#NotesUserObjects
-    Write-Output -InputObject $NotesUserObjects
+      #)#NotesUserObjects
+    #Write-Output -InputObject $NotesUserObjects
     } #All
   }
 }#Process
