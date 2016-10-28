@@ -190,6 +190,7 @@ Process
               $nuh.$prop = $userdoc.GetItemValue($prop)
               if ($nuh.$prop.count -eq 1 -and -not [string]::IsNullOrEmpty($nuh.$prop[0])) {$nuh.$prop = $nuh.$prop[0].tostring()}
             }
+            $nuh.NotesSourceDatabase = $ND
             $nuo = New-Object -TypeName PSCustomObject -Property $nuh
             Write-Output -InputObject $nuo
             $userdoc = $NotesViews.$DatabaseView.GetNextDocument($userdoc)
